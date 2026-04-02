@@ -1,1 +1,1 @@
-# Strategic-Marketing-Flow-Optimization
+# Strategic Marketing Architecture
