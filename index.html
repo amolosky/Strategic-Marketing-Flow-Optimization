@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jewelry Depot — Email Flow Architecture & Decision Logic</title>
+<style>
+  :root {
+    --chk: #E74C3C; --chk-bg: #FDEDEC; --chk-tx: #922B21;
+    --crt: #F39C12; --crt-bg: #FEF5E7; --crt-tx: #7E5109;
+    --brw: #3498DB; --brw-bg: #EBF5FB; --brw-tx: #1A5276;
+    --wel: #27AE60; --wel-bg: #EAFAF1; --wel-tx: #1E8449;
+    --pur: #8E44AD; --pur-bg: #F4ECF7; --pur-tx: #6C3483;
+    --sup: #95A5A6; --sup-bg: #F2F3F4; --sup-tx: #616A6B;
+    --camp: #34495E; --camp-bg: #EBEDEF; --camp-tx: #2C3E50;
+    --gap: #E74C3C; --warn: #F39C12; --opp: #3498DB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', -apple-system, sans-serif; max-width: 1300px; margin: 0 auto; padding: 20px 30px; color: #333; line-height: 1.5; background: #fff; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 19px; margin: 36px 0 12px; padding: 8px 12px; background: #2C3E50; color: #fff; border-radius: 4px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: #2C3E50; border-bottom: 2px solid #dee2e6; padding-bottom: 4px; }
+  .meta { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .meta strong { color: #333; }
+
+  /* TOC */
+  nav { background: #F8F9FA; border: 1px solid #dee2e6; border-radius: 6px; padding: 14px 20px; margin-bottom: 30px; }
+  nav h3 { border: none; margin: 0 0 8px; font-size: 14px; }
+  nav ol { padding-left: 22px; font-size: 13px; line-height: 1.9; }
+  nav a { color: #2C3E50; text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 20px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 4px; }
+  .legend-item .swatch { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; vertical-align: middle; letter-spacing: 0.5px; }
+  .badge.live { background: #27AE60; color: #fff; }
+  .badge.new  { background: #3498DB; color: #fff; }
+  .badge.rec  { background: #F39C12; color: #fff; }
+  .badge.gap  { background: #E74C3C; color: #fff; }
+  .badge.todo { background: #95A5A6; color: #fff; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 13px; }
+  th, td { border: 1px solid #dee2e6; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #F8F9FA; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #555; }
+  tr:nth-child(even) { background: #FDFDFD; }
+
+  /* Track-colored rows */
+  .row-chk { border-left: 4px solid var(--chk); }
+  .row-crt { border-left: 4px solid var(--crt); }
+  .row-brw { border-left: 4px solid var(--brw); }
+  .row-wel { border-left: 4px solid var(--wel); }
+  .row-pur { border-left: 4px solid var(--pur); }
+
+  /* Email card in swimlane */
+  .email-card { border-radius: 5px; padding: 6px 8px; margin: 3px 0; font-size: 11px; line-height: 1.35; }
+  .email-card strong { display: block; font-size: 12px; }
+  .ec-chk { background: var(--chk-bg); border-left: 3px solid var(--chk); }
+  .ec-crt { background: var(--crt-bg); border-left: 3px solid var(--crt); }
+  .ec-brw { background: var(--brw-bg); border-left: 3px solid var(--brw); }
+  .ec-wel { background: var(--wel-bg); border-left: 3px solid var(--wel); }
+  .ec-pur { background: var(--pur-bg); border-left: 3px solid var(--pur); }
+  .ec-sup { background: var(--sup-bg); border-left: 3px solid var(--sup); color: #888; }
+
+  /* Suppression matrix */
+  .mx-active { background: #E8F8F5; text-align: center; font-weight: 600; color: #1ABC9C; }
+  .mx-suppress { background: #FDEDEC; text-align: center; font-weight: 600; color: #E74C3C; }
+  .mx-offset { background: #FEF5E7; text-align: center; font-weight: 600; color: #F39C12; }
+  .mx-ok { background: #EBF5FB; text-align: center; color: #3498DB; }
+  .mx-na { background: #F8F9FA; text-align: center; color: #ccc; }
+
+  /* Gap cards */
+  .gap-card { padding: 10px 14px; border-radius: 5px; margin: 6px 0; font-size: 13px; }
+  .gap-critical { background: #FDEDEC; border-left: 4px solid var(--gap); }
+  .gap-warning  { background: #FEF5E7; border-left: 4px solid var(--warn); }
+  .gap-opp      { background: #EBF5FB; border-left: 4px solid var(--opp); }
+
+  /* Callout */
+  .callout { background: #F8F9FA; border-left: 4px solid #2C3E50; padding: 10px 14px; margin: 10px 0; font-size: 13px; border-radius: 0 4px 4px 0; }
+  .callout.rule { border-left-color: #8E44AD; background: #F4ECF7; }
+  .callout.important { border-left-color: #E74C3C; background: #FDEDEC; }
+
+  /* Swimlane grid */
+  .swim-table { overflow-x: auto; }
+  .swim-table table { min-width: 1100px; }
+  .swim-table th, .swim-table td { min-width: 105px; }
+  .swim-table .track-header { font-weight: 700; min-width: 120px; max-width: 120px; writing-mode: horizontal-tb; font-size: 12px; }
+
+  /* Decision tree (pure CSS) */
+  .dtree { font-size: 13px; }
+  .dtree .node { display: inline-block; padding: 8px 14px; border-radius: 6px; margin: 4px 0; font-weight: 600; }
+  .dtree .decision { background: #F8F9FA; border: 2px solid #ADB5BD; border-radius: 50%; padding: 10px 14px; font-weight: 400; font-style: italic; }
+  .dtree ul { list-style: none; padding-left: 36px; position: relative; }
+  .dtree > ul { padding-left: 0; }
+  .dtree ul::before { content: ''; position: absolute; left: 16px; top: 0; bottom: 14px; border-left: 2px solid #ADB5BD; }
+  .dtree > ul::before { display: none; }
+  .dtree li { position: relative; padding: 5px 0 5px 24px; }
+  .dtree li::before { content: ''; position: absolute; left: -20px; top: 22px; width: 20px; border-top: 2px solid #ADB5BD; }
+  .dtree > ul > li::before { display: none; }
+  .dtree > ul > li { padding-left: 0; }
+  .dtree .arrow-label { font-size: 11px; color: #888; font-weight: 400; margin-right: 6px; }
+  .node-chk { background: var(--chk-bg); border: 2px solid var(--chk); color: var(--chk-tx); }
+  .node-crt { background: var(--crt-bg); border: 2px solid var(--crt); color: var(--crt-tx); }
+  .node-brw { background: var(--brw-bg); border: 2px solid var(--brw); color: var(--brw-tx); }
+  .node-wel { background: var(--wel-bg); border: 2px solid var(--wel); color: var(--wel-tx); }
+  .node-pur { background: var(--pur-bg); border: 2px solid var(--pur); color: var(--pur-tx); }
+  .node-dual { background: var(--chk-bg); border: 3px solid var(--chk); box-shadow: 3px 3px 0 var(--crt); color: var(--chk-tx); }
+  .node-camp { background: var(--camp-bg); border: 2px solid var(--camp); color: var(--camp-tx); }
+
+  /* Escalation ladder */
+  .escalation { display: flex; align-items: center; gap: 0; margin: 16px 0; flex-wrap: wrap; }
+  .esc-node { padding: 12px 18px; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fff; text-align: center; min-width: 140px; }
+  .esc-arrow { font-size: 24px; color: #ADB5BD; padding: 0 8px; }
+  .esc-note { font-size: 11px; color: #fff; font-weight: 400; display: block; margin-top: 2px; }
+
+  /* Progress tracker */
+  .tracker td:first-child { font-weight: 600; }
+  .status-done { color: #27AE60; font-weight: 700; }
+  .status-todo { color: #95A5A6; font-weight: 700; }
+  .status-gap  { color: #E74C3C; font-weight: 700; }
+
+  /* Print styles */
+  @media print {
+    body { max-width: 100%; padding: 10px; font-size: 11px; }
+    h2 { break-before: auto; }
+    .swim-table table { min-width: auto; font-size: 10px; }
+    .email-card { font-size: 9px; padding: 3px 5px; }
+    nav { break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Jewelry Depot — Email Flow Architecture &amp; Decision Logic</h1>
+<p class="meta">
+  <strong>Last updated:</strong> April 1, 2026 &nbsp;|&nbsp;
+  <strong>Store:</strong> shop.jewelrydepot.com &nbsp;|&nbsp;
+  <strong>AOV:</strong> $750 &nbsp;|&nbsp;
+  <strong>Avg sales cycle:</strong> 27 days &nbsp;|&nbsp;
+  <strong>Profiles active:</strong> 43 (3 purchasers excluded) &nbsp;|&nbsp;
+  <strong>Plan:</strong> Klaviyo Email (no SMS)
+</p>
+
+<!-- ═══════════════════ TOC ═══════════════════ -->
+<nav>
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#legend">Legend &amp; Color Key</a></li>
+    <li><a href="#decision-tree">Priority Decision Tree — Which Email Wins</a></li>
+    <li><a href="#escalation">Intent Escalation Ladder</a></li>
+    <li><a href="#tracks">Track-by-Track Email Schedules</a></li>
+    <li><a href="#swimlane">Combined Swimlane Timeline</a></li>
+    <li><a href="#dual-track">Dual-Track Scenario: Checkout + Cart</a></li>
+    <li><a href="#suppression">Suppression Matrix</a></li>
+    <li><a href="#timing">Timing, Frequency &amp; Smart Sending</a></li>
+    <li><a href="#segments">Segment Definitions for Digest Campaigns</a></li>
+    <li><a href="#reentry">Re-Entry &amp; Cooldown Rules</a></li>
+    <li><a href="#gaps">Gaps, Chokepoints &amp; Missed Opportunities</a></li>
+    <li><a href="#future">Future Enhancements (Not in Diagram)</a></li>
+    <li><a href="#tracker">Implementation Tracker</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════ 1. LEGEND ═══════════════════ -->
+<h2 id="legend">1. Legend &amp; Color Key</h2>
+
+<h3>Track Colors</h3>
+<div class="legend">
+  <div class="legend-item"><span class="swatch" style="background:var(--chk)"></span> <strong>Checkout Recovery</strong> — highest intent</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--crt)"></span> <strong>Cart Recovery</strong> — high intent</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--brw)"></span> <strong>Browse Abandonment</strong> — medium intent</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--wel)"></span> <strong>Welcome</strong> — new subscriber</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--pur)"></span> <strong>Post-Purchase</strong> — buyer</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--sup)"></span> <strong>Suppressed</strong> — blocked by higher-priority track</div>
+  <div class="legend-item"><span class="swatch" style="background:var(--camp)"></span> <strong>Lifecycle Campaign</strong> — scheduled sends</div>
+</div>
+
+<h3>Status Badges</h3>
+<div class="legend">
+  <div class="legend-item"><span class="badge live">LIVE</span> Currently active in Klaviyo</div>
+  <div class="legend-item"><span class="badge new">NEW</span> Built in this project (digest system)</div>
+  <div class="legend-item"><span class="badge rec">REC</span> Recommended addition for optimization</div>
+  <div class="legend-item"><span class="badge gap">GAP</span> Missing — identified as a gap</div>
+  <div class="legend-item"><span class="badge todo">TODO</span> Planned, not yet implemented</div>
+</div>
+
+<!-- ═══════════════════ 2. DECISION TREE ═══════════════════ -->
+<h2 id="decision-tree">2. Priority Decision Tree — Which Email Wins</h2>
+
+<p>When a customer is eligible for multiple flows simultaneously, this tree determines which track takes priority. Read top-to-bottom — the <strong>first match wins</strong>.</p>
+
+<div class="callout rule"><strong>Core rule:</strong> The highest-intent behavioral signal always takes priority. Checkout &gt; Cart &gt; Browse &gt; Welcome &gt; Campaigns. A new subscriber who starts checkout gets checkout emails, not welcome emails.</div>
+
+<div class="dtree">
+<ul>
+  <li>
+    <span class="node" style="background:#F8F9FA; border:2px solid #ADB5BD;">🔔 Customer event detected (any Shopify event or new subscription)</span>
+    <ul>
+
+      <!-- Branch 1: Purchased -->
+      <li>
+        <span class="arrow-label">Placed Order in last 20 days? → YES</span><br>
+        <span class="node node-pur">🟣 POST-PURCHASE TRACK</span>
+        <ul>
+          <li>Send: <strong>Thank You email only</strong> (order confirmation + care preview)</li>
+          <li>Suppress: <strong>ALL other flows and campaigns for 20 days</strong></li>
+          <li>After 20 days: Profile re-enters normal eligibility based on current behavior</li>
+        </ul>
+      </li>
+
+      <!-- Branch 2: Started Checkout -->
+      <li>
+        <span class="arrow-label">NO purchase → Started Checkout in last 7 days? → YES</span><br>
+        <ul>
+
+          <!-- Sub-branch: Also has cart items -->
+          <li>
+            <span class="arrow-label">Also has Added-to-Cart items? → YES</span><br>
+            <span class="node node-dual">🔴🟠 DUAL TRACK — Checkout + Cart on offset days</span>
+            <ul>
+              <li>Checkout emails get <strong>priority days</strong> (Day 0, 1, 3, 7)</li>
+              <li>Cart digest emails get <strong>offset days</strong> (Day 2, 5)</li>
+              <li><strong>Never two emails on the same day</strong></li>
+              <li>Suppress: Browse Abandonment</li>
+              <li>See <a href="#dual-track">Section 6: Dual-Track Scenario</a></li>
+            </ul>
+          </li>
+
+          <!-- Sub-branch: Checkout only -->
+          <li>
+            <span class="arrow-label">No cart items → </span>
+            <span class="node node-chk">🔴 CHECKOUT TRACK (Solo)</span>
+            <ul>
+              <li>Full checkout recovery sequence: Flow emails → Digest follow-ups</li>
+              <li>Suppress: Browse Abandonment, Cart Digest</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+
+      <!-- Branch 3: Added to Cart (no checkout) -->
+      <li>
+        <span class="arrow-label">NO checkout → Added to Cart in last 21 days? → YES</span><br>
+        <span class="node node-crt">🟠 CART TRACK</span>
+        <ul>
+          <li>Cart recovery sequence: Flow email → Cart Digest follow-ups</li>
+          <li>Suppress: Browse Abandonment</li>
+          <li>If customer later starts checkout → escalate to Checkout Track (see <a href="#escalation">Intent Escalation</a>)</li>
+        </ul>
+      </li>
+
+      <!-- Branch 4: Viewed Product -->
+      <li>
+        <span class="arrow-label">NO cart → Viewed Product in last 30 days? → YES</span><br>
+        <span class="node node-brw">🔵 BROWSE ABANDONMENT TRACK</span>
+        <ul>
+          <li>Browse recovery sequence: 4 emails over 14 days</li>
+          <li>If customer adds to cart → exit browse, enter Cart Track</li>
+          <li>If customer starts checkout → exit browse, enter Checkout Track</li>
+        </ul>
+      </li>
+
+      <!-- Branch 5: New Subscriber -->
+      <li>
+        <span class="arrow-label">NO browse → New Subscriber (under 21 days)? → YES</span><br>
+        <span class="node node-wel">🟢 WELCOME TRACK</span>
+        <ul>
+          <li>Currently: 1 welcome email (immediate)</li>
+          <li><strong>Does NOT suppress any other flow</strong> — if subscriber browses/carts/checks out, those flows fire in parallel</li>
+          <li>Momentum preserved: Welcome + Checkout can co-exist</li>
+        </ul>
+      </li>
+
+      <!-- Branch 6: Lifecycle -->
+      <li>
+        <span class="arrow-label">NOT new → </span>
+        <span class="node node-camp">⚪ LIFECYCLE — Campaigns only</span>
+        <ul>
+          <li>Regular campaigns: New arrivals (2×/mo), Editorial (2×/mo), Collection spotlight (1×/mo)</li>
+          <li>Seasonal campaigns per calendar</li>
+        </ul>
+      </li>
+
+    </ul>
+  </li>
+</ul>
+</div>
+
+<!-- ═══════════════════ 3. ESCALATION ═══════════════════ -->
+<h2 id="escalation">3. Intent Escalation Ladder</h2>
+
+<p>When a customer's intent <strong>upgrades</strong> mid-flow, the higher-intent track takes over. The lower-intent flow exits or goes to offset.</p>
+
+<div class="escalation">
+  <div class="esc-node" style="background:var(--brw);">🔵 BROWSE<br><span class="esc-note">Viewed Product</span><span class="esc-note">Medium intent</span></div>
+  <div class="esc-arrow">→</div>
+  <div class="esc-node" style="background:var(--crt);">🟠 CART<br><span class="esc-note">Added to Cart</span><span class="esc-note">High intent</span></div>
+  <div class="esc-arrow">→</div>
+  <div class="esc-node" style="background:var(--chk);">🔴 CHECKOUT<br><span class="esc-note">Started Checkout</span><span class="esc-note">Highest intent</span></div>
+  <div class="esc-arrow">→</div>
+  <div class="esc-node" style="background:var(--pur);">🟣 PURCHASE<br><span class="esc-note">Placed Order</span><span class="esc-note">20-day suppress</span></div>
+</div>
+
+<table>
+  <tr><th>Escalation Event</th><th>What Happens to Current Flow</th><th>What Activates</th></tr>
+  <tr class="row-brw"><td>Browser <strong>adds to cart</strong></td><td>Browse flow: <strong>EXIT immediately</strong></td><td>Cart Flow Email 1 at +2h → Cart Digest sequence</td></tr>
+  <tr class="row-crt"><td>Cart user <strong>starts checkout</strong></td><td>Cart flow: <strong>Pause, moves to offset days</strong></td><td>Checkout Flow Email 1 at +1h → Checkout sequence gets priority days</td></tr>
+  <tr class="row-chk"><td>Checkout user <strong>places order</strong></td><td>Checkout + Cart flows: <strong>EXIT immediately</strong></td><td>Post-Purchase Thank You → 20-day suppression on ALL flows</td></tr>
+  <tr class="row-wel"><td>New subscriber <strong>takes any action</strong></td><td>Welcome flow: <strong>CONTINUES in parallel</strong></td><td>Relevant action flow fires concurrently — momentum preserved</td></tr>
+</table>
+
+<div class="callout important"><strong>Critical momentum rule:</strong> The Welcome flow does NOT suppress and is NOT suppressed by action flows. A new subscriber who immediately starts checkout receives BOTH the welcome email AND the checkout flow. This captures high-intent momentum from new leads (often from Meta Ads).</div>
+
+<!-- ═══════════════════ 4. TRACK SCHEDULES ═══════════════════ -->
+<h2 id="tracks">4. Track-by-Track Email Schedules</h2>
+
+<!-- 4a: Checkout -->
+<h3 style="color:var(--chk);">4a. 🔴 Checkout Recovery Track</h3>
+<p><strong>Trigger:</strong> <code>Checkout Started</code> event, no <code>Placed Order</code> within window<br>
+<strong>Lookback:</strong> 7 days &nbsp;|&nbsp; <strong>Total emails:</strong> 4 over 7 days &nbsp;|&nbsp; <strong>Exit:</strong> Purchase or 7-day expiry</p>
+
+<table>
+  <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
+  <tr class="row-chk">
+    <td><strong>+1 hour</strong></td>
+    <td>Checkout #1</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>"Complete your purchase" — dynamic product block showing checkout items, images, prices. Clean, elegant, single focus.</td>
+    <td>Return to Checkout</td>
+    <td>Uses existing Klaviyo flow. Template: Abandoned Cart Klaviyo March 2026.html. <strong>Skip smart sending</strong> — too time-sensitive to delay.</td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>+24 hours</strong></td>
+    <td>Checkout #2</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>Trust &amp; reassurance — returns policy, warranty, authenticity certification, financing options. Cart contents reminder. Customer service contact info.</td>
+    <td>Complete Purchase</td>
+    <td>Existing flow Email 2. "Questions? We're here to help."</td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>+3 days</strong></td>
+    <td>Checkout Digest</td>
+    <td><span class="badge new">NEW</span></td>
+    <td>ALL checkout items consolidated (from <code>checkout_digest_items</code> property). Social proof — reviews for those items/categories. "Customers who bought these also loved…"</td>
+    <td>Return to Checkout</td>
+    <td>Uses digest campaign with <code>checkout_digest_count &gt; 0</code> segment. Script updates property; campaign sends. Items >$1,000: include financing callout.</td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>+7 days</strong></td>
+    <td>Checkout Final</td>
+    <td><span class="badge rec">REC</span></td>
+    <td>"Your pieces are waiting." Complimentary service offer (free engraving, resizing, cleaning kit). Full trust block. Final gentle close. If cart >$2,000: personal note from consultant.</td>
+    <td>Complete Purchase</td>
+    <td>Final touch before items expire. Do NOT discount. Service-based incentive ONLY.</td>
+  </tr>
+</table>
+
+<!-- 4b: Cart -->
+<h3 style="color:var(--crt);">4b. 🟠 Cart Recovery Track</h3>
+<p><strong>Trigger:</strong> <code>Added to Cart</code> event, no <code>Started Checkout</code> within window<br>
+<strong>Lookback:</strong> 21 days &nbsp;|&nbsp; <strong>Total emails:</strong> 4 over 10 days &nbsp;|&nbsp; <strong>Exit:</strong> Purchase, checkout start, or 10-day expiry</p>
+
+<table>
+  <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
+  <tr class="row-crt">
+    <td><strong>+2 hours</strong></td>
+    <td>Cart #1</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>"Your cart is saved" — most recent item with image, name, price. Clean design, brand imagery.</td>
+    <td>View Cart</td>
+    <td>Existing Klaviyo flow triggered by Added to Cart. <strong>Skip smart sending.</strong></td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>+2 days</strong></td>
+    <td>Cart Digest #1</td>
+    <td><span class="badge new">NEW</span></td>
+    <td>ALL cart items consolidated (from <code>cart_digest_items</code> property). Styling tips: "How to wear these pieces." Compare-at price strikethrough where applicable.</td>
+    <td>View Cart</td>
+    <td>Uses digest campaign with <code>cart_digest_count &gt; 0</code> segment. Exclude profiles with recent checkout (in Checkout Track).</td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>+5 days</strong></td>
+    <td>Cart Digest #2</td>
+    <td><span class="badge new">NEW</span></td>
+    <td>Social proof — reviews for carted items or categories. "Customers who loved these also loved…" Include 1–2 complementary product suggestions.</td>
+    <td>View Cart</td>
+    <td>Second digest send. If no engagement on Digest #1, consider different subject line angle.</td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>+10 days</strong></td>
+    <td>Cart Final</td>
+    <td><span class="badge rec">REC</span></td>
+    <td>Trust &amp; reassurance — returns, warranty, secure payment, financing. "These pieces are still available." Last touchpoint before items go stale.</td>
+    <td>View Cart</td>
+    <td>Final cart touch. No discount. Service-based incentive if appropriate (complimentary gift wrap).</td>
+  </tr>
+</table>
+
+<!-- 4c: Browse -->
+<h3 style="color:var(--brw);">4c. 🔵 Browse Abandonment Track</h3>
+<p><strong>Trigger:</strong> <code>Viewed Product</code> event, no <code>Added to Cart</code> or <code>Started Checkout</code><br>
+<strong>Lookback:</strong> 30 days &nbsp;|&nbsp; <strong>Total emails:</strong> 4 over 14 days &nbsp;|&nbsp; <strong>Exit:</strong> Cart add, checkout, purchase, or 14-day expiry</p>
+
+<table>
+  <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
+  <tr class="row-brw">
+    <td><strong>+2 hours</strong></td>
+    <td>Browse #1</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>"Still thinking about [product]?" — Dynamic product image &amp; details. Emphasize craftsmanship. Include 1–2 reviews for the product/category.</td>
+    <td>View Product</td>
+    <td>Klaviyo flow triggered by Viewed Product. Frequency cap: max 1 browse email per 48h regardless of how many products viewed.</td>
+  </tr>
+  <tr class="row-brw">
+    <td><strong>+3 days</strong></td>
+    <td>Browse #2</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>Category-specific education. Rings → sizing guide. Necklaces → layering guide. Earrings → face-shape guide.</td>
+    <td>Explore Collection</td>
+    <td>Conditional split by product category viewed. Educational content builds trust for high-AOV consideration.</td>
+  </tr>
+  <tr class="row-brw">
+    <td><strong>+7 days</strong></td>
+    <td>Browse #3</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>Social proof + "Customers who viewed this also loved…" Show the viewed product + 3 similar items.</td>
+    <td>View Product</td>
+    <td>Cross-sell opportunity. Similar items by category and price tier.</td>
+  </tr>
+  <tr class="row-brw">
+    <td><strong>+14 days</strong></td>
+    <td>Browse #4</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>"This piece is waiting for you." Full trust block: returns, warranty, authenticity, financing. Final inspiration.</td>
+    <td>View Product</td>
+    <td>Final browse touch. At Day 14, this is halfway through the 27-day consideration cycle — still a valuable touchpoint.</td>
+  </tr>
+</table>
+
+<!-- 4d: Welcome -->
+<h3 style="color:var(--wel);">4d. 🟢 Welcome Track</h3>
+<p><strong>Trigger:</strong> Profile created + subscribed to email (NOT triggered by purchase)<br>
+<strong>Current state:</strong> 1 email only &nbsp;|&nbsp; <strong>Does NOT suppress other flows</strong></p>
+
+<table>
+  <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
+  <tr class="row-wel">
+    <td><strong>Immediate</strong></td>
+    <td>Welcome #1</td>
+    <td><span class="badge live">LIVE</span></td>
+    <td>Welcome + brand story. Signature pieces hero imagery. What makes Jewelry Depot different.</td>
+    <td>Browse Collection</td>
+    <td>Currently the ONLY welcome email. This is functional but under-optimized — see <a href="#gaps">Gaps</a>.</td>
+  </tr>
+  <tr class="row-wel">
+    <td>Day 2–21</td>
+    <td>Welcome #2–7</td>
+    <td><span class="badge gap">GAP</span></td>
+    <td>Not yet built. See <a href="#future">Future Enhancements</a> for the full 7-email sequence plan.</td>
+    <td>—</td>
+    <td>Future expansion: education, social proof, styling, craftsmanship, trust signals, soft CTA.</td>
+  </tr>
+</table>
+
+<div class="callout"><strong>Parallel operation:</strong> Welcome is unique — it runs alongside any action flow. A Meta Ads lead who subscribes AND immediately adds to cart gets Welcome #1 (immediate) PLUS Cart #1 (+2h). Both fire. Smart sending should not block the action flow email.</div>
+
+<!-- 4e: Post-Purchase -->
+<h3 style="color:var(--pur);">4e. 🟣 Post-Purchase Track</h3>
+<p><strong>Trigger:</strong> <code>Placed Order</code> event<br>
+<strong>Suppression window:</strong> 20 days — ALL other flows blocked except Thank You<br>
+<strong>After 20 days:</strong> Profile re-enters normal flow eligibility</p>
+
+<table>
+  <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
+  <tr class="row-pur">
+    <td><strong>Immediate</strong></td>
+    <td>Thank You</td>
+    <td><span class="badge rec">REC</span></td>
+    <td>Warm personal thank you. Reaffirm great choice. Order details + shipping timeline. Brand voice.</td>
+    <td>Track Order</td>
+    <td>Currently handled by Shopify's order confirmation, not Klaviyo. <span class="badge gap">GAP</span> — Klaviyo thank-you email would allow brand-consistent experience and lead into post-purchase flow.</td>
+  </tr>
+  <tr class="row-pur">
+    <td>Day 1–20</td>
+    <td colspan="5" style="background:var(--sup-bg); color:var(--sup-tx); text-align:center; font-style:italic;">
+      ⛔ 20-DAY SUPPRESSION WINDOW — No checkout, cart, browse, welcome, or campaign emails. Only Shopify transactional emails (shipping confirmations).
+    </td>
+  </tr>
+  <tr class="row-pur">
+    <td><strong>Day 20+</strong></td>
+    <td>Re-entry</td>
+    <td><span class="badge todo">TODO</span></td>
+    <td>Suppression lifts. Profile re-evaluated against current behavior. If new browse/cart activity exists, appropriate flow activates.</td>
+    <td>—</td>
+    <td>Currently the 20-day exclusion is in the digest script only. Needs to be enforced across ALL Klaviyo flows via flow filters.</td>
+  </tr>
+</table>
+
+<!-- ═══════════════════ 5. SWIMLANE TIMELINE ═══════════════════ -->
+<h2 id="swimlane">5. Combined Swimlane Timeline</h2>
+
+<p>This grid shows ALL tracks side-by-side. Read each row (track) left-to-right to see the email cadence. Colored cells = email fires. Gray cells = suppressed.</p>
+
+<div class="swim-table">
+<table>
+  <tr>
+    <th class="track-header">Track</th>
+    <th>0–1h</th>
+    <th>2–4h</th>
+    <th>Day 1 (24h)</th>
+    <th>Day 2</th>
+    <th>Day 3</th>
+    <th>Day 5</th>
+    <th>Day 7</th>
+    <th>Day 10</th>
+    <th>Day 14</th>
+    <th>Day 20+</th>
+  </tr>
+
+  <!-- Checkout -->
+  <tr>
+    <td class="track-header" style="background:var(--chk); color:#fff;">🔴 CHECKOUT</td>
+    <td>
+      <div class="email-card ec-chk"><strong>Chk #1</strong> Complete purchase <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-chk"><strong>Chk #2</strong> Trust &amp; financing <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-chk"><strong>Chk Digest</strong> All items + social proof <span class="badge new">NEW</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-chk"><strong>Chk Final</strong> Service offer <span class="badge rec">REC</span></div>
+    </td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+
+  <!-- Cart -->
+  <tr>
+    <td class="track-header" style="background:var(--crt); color:#fff;">🟠 CART</td>
+    <td></td>
+    <td>
+      <div class="email-card ec-crt"><strong>Cart #1</strong> Cart saved <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-crt"><strong>Cart Digest #1</strong> All items + styling <span class="badge new">NEW</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-crt"><strong>Cart Digest #2</strong> Social proof <span class="badge new">NEW</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-crt"><strong>Cart Final</strong> Trust signals <span class="badge rec">REC</span></div>
+    </td>
+    <td></td>
+    <td></td>
+  </tr>
+
+  <!-- Browse -->
+  <tr>
+    <td class="track-header" style="background:var(--brw); color:#fff;">🔵 BROWSE</td>
+    <td></td>
+    <td>
+      <div class="email-card ec-brw"><strong>Browse #1</strong> Still thinking? <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td></td>
+    <td>
+      <div class="email-card ec-brw"><strong>Browse #2</strong> Category education <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-brw"><strong>Browse #3</strong> Social proof <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td>
+      <div class="email-card ec-brw"><strong>Browse #4</strong> Final inspiration <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+  </tr>
+
+  <!-- Welcome -->
+  <tr>
+    <td class="track-header" style="background:var(--wel); color:#fff;">🟢 WELCOME</td>
+    <td>
+      <div class="email-card ec-wel"><strong>Welcome #1</strong> Brand story <span class="badge live">LIVE</span></div>
+    </td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>
+      <div class="email-card ec-sup"><em>Future: Welcome #2–7 over 21 days</em></div>
+    </td>
+  </tr>
+
+  <!-- Post-Purchase -->
+  <tr>
+    <td class="track-header" style="background:var(--pur); color:#fff;">🟣 POST-PURCHASE</td>
+    <td>
+      <div class="email-card ec-pur"><strong>Thank You</strong> Order confirmation <span class="badge rec">REC</span></div>
+    </td>
+    <td colspan="8" style="background: repeating-linear-gradient(45deg, var(--sup-bg), var(--sup-bg) 10px, #fff 10px, #fff 20px); text-align:center; color:var(--sup-tx); font-style:italic; font-size:12px; vertical-align:middle;">
+      ⛔ 20-DAY SUPPRESSION — All flows &amp; campaigns blocked
+    </td>
+    <td>
+      <div class="email-card ec-pur"><strong>Re-entry</strong> Normal eligibility resumes</div>
+    </td>
+  </tr>
+
+  <!-- Suppression -->
+  <tr>
+    <td class="track-header" style="background:var(--sup); color:#fff;">⚪ CAMPAIGNS</td>
+    <td colspan="10" style="font-size:12px; color:#666; padding:10px;">
+      New Arrivals (2×/mo) · Editorial/Lifestyle (2×/mo) · Collection Spotlight (1×/mo) · Seasonal per calendar<br>
+      <strong>Frequency:</strong> Max 1 campaign/week for engaged. Max 1–2/month for low engagement. <strong>Always respect flow priority — skip campaign if profile received flow email that day.</strong>
+    </td>
+  </tr>
+</table>
+</div>
+
+<!-- ═══════════════════ 6. DUAL TRACK ═══════════════════ -->
+<h2 id="dual-track">6. Dual-Track Scenario: Checkout + Cart Items</h2>
+
+<p>When a customer has both <strong>Started Checkout</strong> items and separate <strong>Added to Cart</strong> items (items they browsed/carted but didn't proceed to checkout with), both tracks run with interleaved timing. Checkout gets priority days.</p>
+
+<div class="callout rule"><strong>Interleave rule:</strong> Never send two emails on the same day for the same profile. Checkout emails claim odd/key days, cart fills the gaps. Maximum: 1 email per day, 4 per week during the dual-track window.</div>
+
+<table>
+  <tr><th>Day</th><th>Track</th><th>Email</th><th>Content</th><th>Status</th></tr>
+  <tr class="row-chk">
+    <td><strong>+1 hour</strong></td>
+    <td style="background:var(--chk-bg); color:var(--chk-tx); font-weight:700;">CHECKOUT</td>
+    <td>Checkout Flow #1</td>
+    <td>"Complete your purchase" — checkout items with images, prices. Immediate urgency (warm, not aggressive).</td>
+    <td><span class="badge live">LIVE</span></td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>+24h (Day 1)</strong></td>
+    <td style="background:var(--chk-bg); color:var(--chk-tx); font-weight:700;">CHECKOUT</td>
+    <td>Checkout Flow #2</td>
+    <td>Trust &amp; reassurance — returns, warranty, financing. Checkout items reminder.</td>
+    <td><span class="badge live">LIVE</span></td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>Day 2</strong></td>
+    <td style="background:var(--crt-bg); color:var(--crt-tx); font-weight:700;">CART (offset)</td>
+    <td>Cart Digest #1</td>
+    <td>ALL cart items (not in checkout) consolidated. "While you're deciding, you also had your eye on these…" Styling tips.</td>
+    <td><span class="badge new">NEW</span></td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>Day 3</strong></td>
+    <td style="background:var(--chk-bg); color:var(--chk-tx); font-weight:700;">CHECKOUT</td>
+    <td>Checkout Digest</td>
+    <td>Consolidated checkout items + social proof. Reviews. "Customers who bought these also loved…"</td>
+    <td><span class="badge new">NEW</span></td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>Day 5</strong></td>
+    <td style="background:var(--crt-bg); color:var(--crt-tx); font-weight:700;">CART (offset)</td>
+    <td>Cart Digest #2</td>
+    <td>Cart items + social proof + complementary suggestions. Secondary conversion opportunity.</td>
+    <td><span class="badge new">NEW</span></td>
+  </tr>
+  <tr class="row-chk">
+    <td><strong>Day 7</strong></td>
+    <td style="background:var(--chk-bg); color:var(--chk-tx); font-weight:700;">CHECKOUT</td>
+    <td>Checkout Final</td>
+    <td>"Your pieces are waiting." Service offer (engraving, resizing). Final gentle close for checkout items.</td>
+    <td><span class="badge rec">REC</span></td>
+  </tr>
+</table>
+
+<p style="font-size:13px; color:#666; margin-top:8px;"><strong>Result:</strong> 6 emails over 7 days. 1 immediate + 5 over the week = roughly 5/week during peak recovery. Acceptable for high-intent dual-track customers with $750+ AOV. The customer has shown intent on multiple items — this level of attention is warranted.</p>
+
+<!-- ═══════════════════ 7. SUPPRESSION MATRIX ═══════════════════ -->
+<h2 id="suppression">7. Suppression Matrix</h2>
+
+<p>Cross-reference: when a profile is "in" the <strong>row</strong> track, what happens to the <strong>column</strong> track?</p>
+
+<table>
+  <tr>
+    <th>Profile is in ↓ \ Effect on →</th>
+    <th style="background:var(--chk-bg);">Checkout Emails</th>
+    <th style="background:var(--crt-bg);">Cart Emails</th>
+    <th style="background:var(--brw-bg);">Browse Emails</th>
+    <th style="background:var(--wel-bg);">Welcome</th>
+    <th style="background:var(--camp-bg); color:#fff;">Campaigns</th>
+  </tr>
+  <tr>
+    <td style="background:var(--chk-bg); font-weight:700;">🔴 Checkout Track</td>
+    <td class="mx-active">✅ ACTIVE</td>
+    <td class="mx-offset">⏸ OFFSET</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-ok">✅ Normal</td>
+  </tr>
+  <tr>
+    <td style="background:var(--crt-bg); font-weight:700;">🟠 Cart Track</td>
+    <td class="mx-na">—</td>
+    <td class="mx-active">✅ ACTIVE</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-ok">✅ Normal</td>
+  </tr>
+  <tr>
+    <td style="background:var(--brw-bg); font-weight:700;">🔵 Browse Track</td>
+    <td class="mx-na">—</td>
+    <td class="mx-na">—</td>
+    <td class="mx-active">✅ ACTIVE</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-ok">✅ Normal</td>
+  </tr>
+  <tr>
+    <td style="background:var(--wel-bg); font-weight:700;">🟢 Welcome Track</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-ok">✅ Unaffected</td>
+    <td class="mx-active">✅ ACTIVE</td>
+    <td class="mx-ok">✅ Normal</td>
+  </tr>
+  <tr>
+    <td style="background:var(--pur-bg); font-weight:700;">🟣 Post-Purchase (20d)</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+    <td class="mx-suppress">❌ SUPPRESSED</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Key:</strong><br>
+  ✅ ACTIVE = this track's emails send normally<br>
+  ⏸ OFFSET = emails still send but on alternate days (dual-track interleave)<br>
+  ❌ SUPPRESSED = emails blocked entirely while in the suppressing track<br>
+  ✅ Unaffected = no suppression relationship — both can co-exist<br>
+  — = not applicable (can't be in a lower-intent track if you're in a higher one)
+</div>
+
+<!-- ═══════════════════ 8. TIMING ═══════════════════ -->
+<h2 id="timing">8. Timing, Frequency &amp; Smart Sending</h2>
+
+<h3>Optimal Send Windows</h3>
+<table>
+  <tr><th>Email Type</th><th>Timing Model</th><th>Send Window</th><th>Timezone</th></tr>
+  <tr>
+    <td>Immediate triggers (Flow Email #1)</td>
+    <td><strong>Event-based:</strong> 1–2 hours after event</td>
+    <td>Fire immediately regardless of time of day</td>
+    <td>N/A — fires on event</td>
+  </tr>
+  <tr>
+    <td>Flow follow-ups (Flow Email #2+)</td>
+    <td><strong>Event-based + window:</strong> delay hours, then queue for optimal window</td>
+    <td>7:00–8:00 PM (primary) or 10:00–11:00 AM (secondary)</td>
+    <td><strong>Recipient local time</strong></td>
+  </tr>
+  <tr>
+    <td>Digest campaigns</td>
+    <td><strong>Schedule-based:</strong> fixed campaign schedule</td>
+    <td>7:30 PM</td>
+    <td><strong>Recipient local time</strong> (Klaviyo "Smart Send Time" or timezone setting)</td>
+  </tr>
+  <tr>
+    <td>Lifecycle campaigns</td>
+    <td><strong>Schedule-based:</strong> manual sends</td>
+    <td>7:00–8:00 PM (weekday) or 11:00 AM (weekend)</td>
+    <td><strong>Recipient local time</strong></td>
+  </tr>
+</table>
+
+<div class="callout"><strong>Why 7–8 PM?</strong> Fine jewelry browsing skews heavily to evening and weekend hours. Customers browse on phones/tablets from the couch. Evening sends align with active browse behavior and decision-making time. Secondary 10–11 AM window catches lunch-break browsers.</div>
+
+<h3>Frequency Caps</h3>
+<table>
+  <tr><th>Rule</th><th>Limit</th><th>Scope</th><th>Enforcement</th></tr>
+  <tr>
+    <td>Max emails per day</td>
+    <td><strong>1 per day</strong> (across flows + campaigns)</td>
+    <td>Per profile</td>
+    <td>Klaviyo Smart Sending + flow scheduling</td>
+  </tr>
+  <tr>
+    <td>Max emails per week (standard tracks)</td>
+    <td><strong>3–4 per week</strong></td>
+    <td>Per profile</td>
+    <td>Flow time delays + campaign frequency</td>
+  </tr>
+  <tr>
+    <td>Max emails per week (dual-track)</td>
+    <td><strong>5 per week</strong> (peak recovery, high intent)</td>
+    <td>Per profile, dual-track only</td>
+    <td>Interleave schedule (see Section 6)</td>
+  </tr>
+  <tr>
+    <td>Browse abandonment throttle</td>
+    <td><strong>Max 1 per 48 hours</strong></td>
+    <td>Per profile, browse flow only</td>
+    <td>Aggregate multiple views into one email</td>
+  </tr>
+</table>
+
+<h3>Smart Sending Configuration — Recommended</h3>
+<table>
+  <tr><th>Setting</th><th>Recommended Value</th><th>Rationale</th></tr>
+  <tr>
+    <td>Global Smart Sending window</td>
+    <td><strong>16 hours</strong></td>
+    <td>Allows evening → next morning sends without blocking. 24h is too restrictive for momentum.</td>
+  </tr>
+  <tr>
+    <td>Checkout Flow Email #1</td>
+    <td><strong>Skip Smart Sending</strong></td>
+    <td>This is the highest-value email. A hot lead who started checkout 1h ago MUST receive this, even if they got a welcome email earlier. <strong>Configure via flow settings → Smart Sending Override.</strong></td>
+  </tr>
+  <tr>
+    <td>Cart Flow Email #1</td>
+    <td><strong>Skip Smart Sending</strong></td>
+    <td>Same logic. High-intent action = immediate response, never blocked.</td>
+  </tr>
+  <tr>
+    <td>All other flow emails</td>
+    <td><strong>Respect Smart Sending</strong></td>
+    <td>Follow-ups are less time-sensitive. If another email was sent recently, a delay is acceptable.</td>
+  </tr>
+  <tr>
+    <td>Campaign sends</td>
+    <td><strong>Respect Smart Sending</strong></td>
+    <td>Campaigns always yield to higher-priority flow emails.</td>
+  </tr>
+</table>
+
+<div class="callout important"><strong>Momentum preservation:</strong> The single most important configuration in this document is setting Checkout #1 and Cart #1 to <strong>skip smart sending</strong>. Without this, a new subscriber from Meta Ads who receives a welcome email and then starts checkout within the smart sending window will NOT receive the checkout recovery email. This is a direct revenue leak for a $750+ AOV store.</div>
+
+<!-- ═══════════════════ 9. SEGMENTS ═══════════════════ -->
+<h2 id="segments">9. Segment Definitions for Digest Campaigns</h2>
+
+<h3>Checkout Digest Campaign Segment</h3>
+<table>
+  <tr><th>Condition</th><th>Value</th><th>Purpose</th></tr>
+  <tr><td><code>checkout_digest_count</code></td><td><strong>&gt; 0</strong></td><td>Has checkout items to show</td></tr>
+  <tr><td>Checkout Started</td><td><strong>&gt; 48 hours ago</strong></td><td>Existing flow emails (1h + 24h) have finished sending</td></tr>
+  <tr><td>Checkout Started</td><td><strong>&lt; 7 days ago</strong></td><td>Items are still fresh / not stale</td></tr>
+  <tr><td>Placed Order</td><td><strong>NOT in last 20 days</strong></td><td>20-day purchaser exclusion</td></tr>
+  <tr><td>Received this campaign</td><td><strong>NOT in last 3 days</strong></td><td>Prevent repeat sends on back-to-back campaign dates</td></tr>
+</table>
+
+<h3>Cart Digest Campaign Segment</h3>
+<table>
+  <tr><th>Condition</th><th>Value</th><th>Purpose</th></tr>
+  <tr><td><code>cart_digest_count</code></td><td><strong>&gt; 0</strong></td><td>Has cart items to show</td></tr>
+  <tr><td>Added to Cart</td><td><strong>&gt; 4 hours ago</strong></td><td>Cart Flow Email 1 (+2h) has already sent</td></tr>
+  <tr><td>Added to Cart</td><td><strong>&lt; 21 days ago</strong></td><td>Items still within consideration window</td></tr>
+  <tr><td>Started Checkout</td><td><strong>NOT in last 7 days</strong></td><td>If they're in Checkout Track, don't send Cart Digest (it offsets instead — handled by dual-track flow)</td></tr>
+  <tr><td>Placed Order</td><td><strong>NOT in last 20 days</strong></td><td>20-day purchaser exclusion</td></tr>
+  <tr><td>Received this campaign</td><td><strong>NOT in last 3 days</strong></td><td>Prevent repeat sends</td></tr>
+</table>
+
+<h3>Digest Script → Campaign Timing</h3>
+<table>
+  <tr><th>Step</th><th>When</th><th>What</th></tr>
+  <tr><td>1. Script runs</td><td>7:00 PM (30 min before campaign)</td><td><code>python daily_digest_updater.py</code> — updates <code>cart_digest_items</code> and <code>checkout_digest_items</code> on all eligible profiles. Excludes 20-day purchasers.</td></tr>
+  <tr><td>2. Campaign sends</td><td>7:30 PM recipient local time</td><td>Klaviyo campaign targets segment (see above). Sends to all profiles matching segment conditions.</td></tr>
+  <tr><td>3. Cadence</td><td>Every 3 days (Tue + Fri recommended)</td><td>Both the script run and campaign send occur every 3 days. Tue + Fri provides even spacing.</td></tr>
+</table>
+
+<div class="callout rule"><strong>Architectural note:</strong> The current digest system is <strong>campaign-based</strong> (scheduled sends to a segment). This means timing is per-schedule, not per-person. A customer who checked out 2 days ago and one who checked out 6 days ago both receive the digest on the same campaign date. <strong>Future optimization:</strong> Convert digest to a segment-triggered flow for per-person timing (see <a href="#gaps">Gaps</a>).</div>
+
+<!-- ═══════════════════ 10. RE-ENTRY ═══════════════════ -->
+<h2 id="reentry">10. Re-Entry &amp; Cooldown Rules</h2>
+
+<table>
+  <tr><th>Track</th><th>Cycle Ends When</th><th>Cooldown Period</th><th>Re-Entry Trigger</th><th>Override</th></tr>
+  <tr class="row-chk">
+    <td><strong>Checkout</strong></td>
+    <td>Purchase OR 7 days with no action</td>
+    <td><strong>7 days</strong> after last checkout email</td>
+    <td>New <code>Checkout Started</code> event</td>
+    <td>New checkout event during cooldown → <strong>reset immediately, re-enter</strong></td>
+  </tr>
+  <tr class="row-crt">
+    <td><strong>Cart</strong></td>
+    <td>Purchase, checkout, OR 10 days with no action</td>
+    <td><strong>7 days</strong> after last cart email</td>
+    <td>New <code>Added to Cart</code> event</td>
+    <td>New cart event during cooldown → <strong>reset immediately, re-enter</strong></td>
+  </tr>
+  <tr class="row-brw">
+    <td><strong>Browse</strong></td>
+    <td>Cart add, checkout, purchase, OR 14 days</td>
+    <td><strong>None</strong> — new views can retrigger</td>
+    <td>New <code>Viewed Product</code> event</td>
+    <td>Frequency cap: max 1 browse email per 48h</td>
+  </tr>
+  <tr class="row-pur">
+    <td><strong>Post-Purchase</strong></td>
+    <td>20 days after purchase</td>
+    <td><strong>20 days</strong> (the suppression IS the cooldown)</td>
+    <td>Automatic — suppression lifts, profile re-evaluates</td>
+    <td>No override. 20-day suppression is absolute.</td>
+  </tr>
+</table>
+
+<div class="callout rule">
+  <strong>Cooldown rationale for fine jewelry ($750 AOV, 27-day cycle):</strong>
+  <ul style="margin:6px 0 0 16px; font-size:13px;">
+    <li><strong>7-day cooldown</strong> = ~25% of the average sales cycle. Long enough to avoid fatigue, short enough to catch renewed intent.</li>
+    <li><strong>New intent event overrides cooldown</strong> because renewed action signals genuine interest. A customer who adds to cart 3 days into cooldown is actively shopping — respond immediately.</li>
+    <li><strong>Hard limit:</strong> No more than 3 complete checkout recovery cycles per 90-day period. After the 3rd full cycle for the same profile, suppress for 30 days. This prevents "professional browsers" from consuming email resources.</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════ 11. GAPS ═══════════════════ -->
+<h2 id="gaps">11. Gaps, Chokepoints &amp; Missed Opportunities</h2>
+
+<h3>🔴 Critical Gaps (Revenue Impact: High)</h3>
+
+<div class="gap-card gap-critical">
+  <strong>GAP-1: 20-day post-purchase suppression not enforced across all flows</strong><br>
+  The 20-day exclusion currently exists <strong>only in the digest script</strong> (<code>get_recent_purchaser_ids()</code>). The live Klaviyo flows (checkout, cart, browse) do NOT have this filter. A customer who just purchased can still receive abandoned cart emails from the flow — this damages trust and brand perception.<br>
+  <strong>Fix:</strong> Add flow filter to every Klaviyo flow: <code>Placed Order NOT in last 20 days</code>. This is a 5-minute fix per flow in Klaviyo's flow builder. <strong>Priority: DO THIS FIRST.</strong>
+</div>
+
+<div class="gap-card gap-critical">
+  <strong>GAP-2: No Klaviyo Thank You email (post-purchase)</strong><br>
+  Currently, order confirmation is handled only by Shopify's default transactional email. Klaviyo has no post-purchase flow. This means: (a) no brand-consistent post-purchase experience, (b) no lead-in to care instructions, reviews, or cross-sell, (c) no Klaviyo attribution data for post-purchase engagement.<br>
+  <strong>Fix:</strong> Create a Klaviyo flow triggered by <code>Placed Order</code>. Email 1 = Thank You (immediate). Start simple, expand later.
+</div>
+
+<div class="gap-card gap-critical">
+  <strong>GAP-3: Smart Sending may block high-intent checkout/cart emails</strong><br>
+  If Smart Sending is set to 24 hours (or any window) and a new subscriber received the Welcome email, the Checkout Flow Email #1 will be BLOCKED if they start checkout within that window. For a $750+ AOV store, this is a direct revenue leak.<br>
+  <strong>Fix:</strong> (a) Set global Smart Sending to 16 hours, (b) Set Checkout #1 and Cart #1 to "Skip Smart Sending" in flow settings. <strong>Verify this setting TODAY.</strong>
+</div>
+
+<div class="gap-card gap-critical">
+  <strong>GAP-4: Digest script runs manually — no automation</strong><br>
+  The <code>daily_digest_updater.py</code> script must be run manually before each campaign send. If forgotten, profiles have stale data and the campaign sends outdated product info (or doesn't send at all if properties are empty).<br>
+  <strong>Fix:</strong> Set up a cron job (macOS <code>launchd</code> or <code>crontab</code>) to run the script at 7:00 PM every Tue and Fri. Example: <code>0 19 * * 2,5 cd /path/to/project &amp;&amp; .venv/bin/python migration/daily_digest_updater.py</code>
+</div>
+
+<div class="gap-card gap-critical">
+  <strong>GAP-5: Collection page UTM bug still active</strong><br>
+  Klaviyo UTM parameters break Shopify collection page loading. Links to collection pages in ANY email (flow or campaign) will fail. This affects every email that links to a collection (e.g., "Browse our Rings" CTA → collection URL → broken page for the customer).<br>
+  <strong>Fix:</strong> See diagnostic steps in the mode instructions. Test, fix, verify. Every email audit should flag this until resolved.
+</div>
+
+<h3>🟡 Chokepoints (Operational Risk)</h3>
+
+<div class="gap-card gap-warning">
+  <strong>CHOKE-1: Checkout Flow + Checkout Digest overlap</strong><br>
+  The existing live Checkout Flow may have follow-up emails beyond #1 and #2 that could overlap with the Checkout Digest campaign on Day 3. If the flow sends a 3rd email AND the digest campaign fires on the same day, the customer gets doubled.<br>
+  <strong>Fix:</strong> Audit the existing Checkout Flow in Klaviyo. Count the emails. If more than 2, either (a) disable flow emails beyond #2 (let digest take over), or (b) add a conditional split in the flow that checks <code>checkout_digest_count > 0</code>.
+</div>
+
+<div class="gap-card gap-warning">
+  <strong>CHOKE-2: Campaign vs. flow timing mismatch</strong><br>
+  The digest is campaign-based (fires on Tue/Fri schedule). A customer who checks out on Monday gets Checkout Flow #1 at +1h and #2 on Tuesday — then the Checkout Digest also fires on Tuesday. That's 2 emails on Tuesday.<br>
+  <strong>Fix:</strong> The segment condition "Checkout Started > 48h ago" mitigates this (see <a href="#segments">Section 9</a>). But consider converting the digest to a segment-triggered FLOW for per-person timing. This is the cleanest long-term solution.
+</div>
+
+<div class="gap-card gap-warning">
+  <strong>CHOKE-3: Browse → Cart escalation mid-flow</strong><br>
+  When a customer is mid-way through the Browse Abandonment flow (e.g., received Browse #2 on Day 3) and adds to cart, does the Browse flow exit cleanly? Klaviyo flows with "Added to Cart" exit conditions should handle this, but needs verification.<br>
+  <strong>Fix:</strong> Verify the Browse Abandonment flow has an exit condition: "Profile has Added to Cart at least once since entering this flow." Test by triggering the scenario manually.
+</div>
+
+<div class="gap-card gap-warning">
+  <strong>CHOKE-4: No global frequency cap in Klaviyo settings</strong><br>
+  Without a global cap, a profile in the dual-track scenario (Checkout + Cart) receiving 5 emails/week PLUS a lifecycle campaign PLUS welcome could exceed comfortable thresholds.<br>
+  <strong>Fix:</strong> In Klaviyo Settings → Email → Sending, configure a global frequency cap. Check current setting and set to max 4–5 emails/week across all sources if not already configured.
+</div>
+
+<h3>🔵 Missed Opportunities (Revenue Upside)</h3>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-1: Welcome series is only 1 email</strong><br>
+  The first 21 days after subscription is the highest-engagement window. A single welcome email captures ~15% of the available brand-building and first-purchase potential. The recommended 7-email series builds trust over the full consideration cycle.<br>
+  <strong>Impact:</strong> Estimated 20–35% increase in first-purchase conversion rate from welcome subscribers. At $750 AOV, even 5 additional conversions/month = $3,750/month incremental revenue.
+</div>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-2: No price drop / back-in-stock alerts</strong><br>
+  Customers who viewed or carted a specific item and it later drops in price or returns to stock are the highest-intent reactivation targets. These are 1-email, high-conversion opportunities.<br>
+  <strong>Impact:</strong> Price drop emails typically convert at 2–5× the rate of standard browse abandonment.
+</div>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-3: Cart Flow email shows single item, not all cart items</strong><br>
+  The live Cart Flow Email #1 (triggered by Added to Cart) shows only the most recent item. If a customer has added 5 items, they only see 1. The digest solves this at +2 days, but there's a 2-day gap where the customer's full cart isn't represented.<br>
+  <strong>Options:</strong> (a) Accept the 2-day gap (digest fills it), (b) Convert Cart Flow #1 to use <code>cart_digest_items</code> property for dynamic rendering (requires script to run before flow email, which may not be realistic for a 2-hour trigger).
+</div>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-4: No cross-sell after post-purchase suppression lifts</strong><br>
+  At Day 20, the suppression lifts but there's no planned email for re-engagement. A customer who bought a ring 3 weeks ago is prime for a complementary piece (matching band, earrings, necklace).<br>
+  <strong>Impact:</strong> Targeted cross-sell at Day 20–30 can drive repeat purchases. "Complete the set" or "Pair with your [purchased item]."
+</div>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-5: No VIP differentiation</strong><br>
+  Profiles with $2,000+ lifetime value or $1,500+ single orders receive the same emails as $150 sterling silver buyers. VIP customers warrant: personal consultant outreach on high-value checkouts, early access to new collections, exclusive service offers.<br>
+  <strong>Impact:</strong> VIP customers have the highest reactivation potential. Even small improvements in VIP retention yield outsized revenue.
+</div>
+
+<div class="gap-card gap-opp">
+  <strong>OPP-6: No winback or sunset flows</strong><br>
+  Customers who haven't purchased in 180+ days have no automated re-engagement. Unengaged profiles (120+ days no opens/clicks) have no sunset flow, potentially hurting deliverability.<br>
+  <strong>Impact:</strong> Winback flows for jewelry typically recover 3–8% of lapsed customers. Sunset flows protect deliverability (reduces complaints and bounces).
+</div>
+
+<!-- ═══════════════════ 12. FUTURE ═══════════════════ -->
+<h2 id="future">12. Future Enhancements (Not in Core Diagram)</h2>
+
+<p>These are strategic improvements that build on the current architecture. Listed in priority order by estimated revenue impact.</p>
+
+<table>
+  <tr><th>#</th><th>Enhancement</th><th>Why</th><th>Complexity</th></tr>
+  <tr><td>F1</td><td>Expand Welcome Series to 7 emails over 21 days</td><td>Brand building during highest-engagement window. Matches 27-day sales cycle.</td><td>Medium — content creation + flow setup</td></tr>
+  <tr><td>F2</td><td>Post-Purchase flow: care instructions (Day 3), review request (Day 14), cross-sell (Day 30)</td><td>Reduces buyer's remorse, generates reviews, drives repeat purchases</td><td>Medium — flow setup + content</td></tr>
+  <tr><td>F3</td><td>Price Drop / Back-in-Stock alerts</td><td>Highest-conversion triggered emails for high-intent viewers</td><td>Medium — requires Shopify product data integration + flow triggers</td></tr>
+  <tr><td>F4</td><td>VIP flow differentiation ($2,000+ lifetime)</td><td>Personal consultant outreach, early access, exclusive services</td><td>Low — segment creation + conditional splits in existing flows</td></tr>
+  <tr><td>F5</td><td>Convert digest from campaign to segment-triggered flow</td><td>Per-person timing instead of fixed schedule. Cleaner architecture.</td><td>Medium — push custom Klaviyo event from script, build flow around it</td></tr>
+  <tr><td>F6</td><td>Winback flow (180+ days lapsed)</td><td>Recover lapsed customers with aspirational, non-desperate messaging</td><td>Low — segment + 4-email flow</td></tr>
+  <tr><td>F7</td><td>Sunset flow (120+ days unengaged)</td><td>Protect deliverability. Suppress or re-permission unengaged profiles.</td><td>Low — segment + 2-email flow</td></tr>
+  <tr><td>F8</td><td>SMS expansion (when plan upgraded)</td><td>Time-sensitive alerts, VIP-exclusive channel, shipping updates</td><td>Medium — plan upgrade + flow modifications</td></tr>
+  <tr><td>F9</td><td>Pinterest Ads audience sync</td><td>Suppress, retarget, and build lookalikes from Klaviyo segments on Pinterest</td><td>Low — integration setup</td></tr>
+  <tr><td>F10</td><td>Automated digest script scheduling (cron)</td><td>Eliminate manual step before each campaign send</td><td>Low — crontab setup</td></tr>
+</table>
+
+<!-- ═══════════════════ 13. TRACKER ═══════════════════ -->
+<h2 id="tracker">13. Implementation Tracker</h2>
+
+<table class="tracker">
+  <tr><th>Item</th><th>Status</th><th>Date</th><th>Notes</th></tr>
+  <tr><td>Checkout Flow Email 1 (immediate)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Mailchimp → Klaviyo migration. Template: Abandoned Cart Klaviyo March 2026.html</td></tr>
+  <tr><td>Checkout Flow Email 2 (trust/financing)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Part of existing flow</td></tr>
+  <tr><td>Cart Flow Email 1 (cart saved)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Existing flow</td></tr>
+  <tr><td>Browse Abandonment Flow (4 emails)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Full 4-email sequence</td></tr>
+  <tr><td>Welcome Email 1</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Single email. expansion planned (F1)</td></tr>
+  <tr><td>Cart Digest Properties (<code>cart_digest_items</code>)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>43 profiles updated, 3 purchasers excluded. <code>daily_digest_updater.py</code></td></tr>
+  <tr><td>Checkout Digest Properties (<code>checkout_digest_items</code>)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>Written for all 43 profiles (same script run)</td></tr>
+  <tr><td>Cart Digest Email Template (HTML block)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>Klaviyo drag-and-drop with <code>{% for %}</code> loop. Working with images, prices, compare-at.</td></tr>
+  <tr>
+    <td>Checkout Digest Email Template</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>Same pattern as cart template but uses <code>checkout_digest_items</code></td>
+  </tr>
+  <tr>
+    <td>Cart Digest Campaign (Klaviyo segment + scheduled send)</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>Segment: <code>cart_digest_count > 0</code> + conditions (see Section 9)</td>
+  </tr>
+  <tr>
+    <td>Checkout Digest Campaign (Klaviyo segment + scheduled send)</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>Segment: <code>checkout_digest_count > 0</code> + conditions (see Section 9)</td>
+  </tr>
+  <tr>
+    <td>Add 20-day purchaser exclusion to ALL live flows</td>
+    <td class="status-gap">❌ GAP</td><td>—</td>
+    <td><strong>CRITICAL — GAP-1.</strong> 5-min fix per flow in Klaviyo flow builder.</td>
+  </tr>
+  <tr>
+    <td>Verify/fix Smart Sending for Checkout #1 and Cart #1</td>
+    <td class="status-gap">❌ GAP</td><td>—</td>
+    <td><strong>CRITICAL — GAP-3.</strong> Check Klaviyo flow settings → Smart Sending override.</td>
+  </tr>
+  <tr>
+    <td>Checkout Final Email (Day 7 service offer)</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>Recommended addition. Content: service offer, not discount.</td>
+  </tr>
+  <tr>
+    <td>Cart Final Email (Day 10 trust signals)</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>Recommended addition. Final cart touchpoint.</td>
+  </tr>
+  <tr>
+    <td>Klaviyo Thank You email (post-purchase)</td>
+    <td class="status-gap">❌ GAP</td><td>—</td>
+    <td><strong>CRITICAL — GAP-2.</strong> Create Placed Order flow with Thank You email.</td>
+  </tr>
+  <tr>
+    <td>Cron job for digest script</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>7:00 PM Tue/Fri. See GAP-4.</td>
+  </tr>
+  <tr>
+    <td>Fix UTM/collection page bug</td>
+    <td class="status-gap">❌ GAP</td><td>—</td>
+    <td><strong>CRITICAL — GAP-5.</strong> All collection links in all emails are broken.</td>
+  </tr>
+  <tr>
+    <td>Verify Browse flow exit conditions</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>CHOKE-3: Confirm browse flow exits on cart/checkout events.</td>
+  </tr>
+  <tr>
+    <td>Audit existing Checkout Flow email count</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>CHOKE-1: How many emails in the live flow? Need to prevent overlap with digest.</td>
+  </tr>
+  <tr>
+    <td>Check global frequency cap setting</td>
+    <td class="status-todo">🔲 TODO</td><td>—</td>
+    <td>CHOKE-4: Klaviyo Settings → Email → Sending.</td>
+  </tr>
+</table>
+
+<hr style="margin-top:40px; border-color:#dee2e6;">
+<p style="font-size:11px; color:#999; margin-top:10px;">
+  Jewelry Depot Email Flow Architecture v1.0 — April 1, 2026<br>
+  Store: shop.jewelrydepot.com | Klaviyo Email Plan | AOV: $750 | 27-day sales cycle<br>
+  Working document — update tracker as items are completed.
+</p>
+
+</body>
+</html>
