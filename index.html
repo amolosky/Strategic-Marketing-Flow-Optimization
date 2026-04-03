@@ -137,11 +137,11 @@
 
 <h1>Jewelry Depot — Email Flow Architecture &amp; Decision Logic</h1>
 <p class="meta">
-  <strong>Last updated:</strong> April 1, 2026 &nbsp;|&nbsp;
+  <strong>Last updated:</strong> April 3, 2026 &nbsp;|&nbsp;
   <strong>Store:</strong> shop.jewelrydepot.com &nbsp;|&nbsp;
   <strong>AOV:</strong> $750 &nbsp;|&nbsp;
   <strong>Avg sales cycle:</strong> 27 days &nbsp;|&nbsp;
-  <strong>Profiles active:</strong> 43 (3 purchasers excluded) &nbsp;|&nbsp;
+  <strong>Profiles active:</strong> 82 (4 purchasers excluded) &nbsp;|&nbsp;
   <strong>Plan:</strong> Klaviyo Email (no SMS)
 </p>
 
@@ -256,11 +256,11 @@
       <!-- Branch 4: Viewed Product -->
       <li>
         <span class="arrow-label">NO cart → Viewed Product in last 30 days? → YES</span><br>
-        <span class="node node-brw">🔵 BROWSE ABANDONMENT TRACK</span>
+        <span class="node node-brw">🔵 BROWSE ABANDONMENT TRACK (Digest-Based)</span>
         <ul>
-          <li>Browse recovery sequence: 4 emails over 14 days</li>
-          <li>If customer adds to cart → exit browse, enter Cart Track</li>
-          <li>If customer starts checkout → exit browse, enter Checkout Track</li>
+          <li>Browse recovery sequence: 2 digest emails over 5 days (7-day re-entry)</li>
+          <li>Conditional split on <code>browse_digest_count > 0</code> before each email</li>
+          <li>If customer adds to cart or starts checkout → profile filter blocks further browse emails</li>
         </ul>
       </li>
 
@@ -401,50 +401,47 @@
 </table>
 
 <!-- 4c: Browse -->
-<h3 style="color:var(--brw);">4c. 🔵 Browse Abandonment Track</h3>
-<p><strong>Trigger:</strong> <code>Viewed Product</code> event, no <code>Added to Cart</code> or <code>Started Checkout</code><br>
-<strong>Lookback:</strong> 30 days &nbsp;|&nbsp; <strong>Total emails:</strong> 4 over 14 days &nbsp;|&nbsp; <strong>Exit:</strong> Cart add, checkout, purchase, or 14-day expiry</p>
+<h3 style="color:var(--brw);">4c. 🔵 Browse Abandonment Track (Digest-Based)</h3>
+<p><strong>Trigger:</strong> <code>Viewed Product</code> event<br>
+<strong>Re-entry:</strong> After 7 days &nbsp;|&nbsp; <strong>Total emails:</strong> 2 over 5 days &nbsp;|&nbsp; <strong>Exit:</strong> Purchase, checkout, or <code>browse_digest_count = 0</code> (conditional split)</p>
+
+<div class="callout important"><strong>Redesigned April 3, 2026:</strong> Converted from per-view 4-email flow to digest-based 2-email flow. The old flow fired on every product view, spamming frequent browsers. The new flow uses <code>browse_digest_items</code> (populated by <code>daily_digest_updater.py</code>) to show ALL recently viewed products in a single grid. Conditional split on <code>browse_digest_count > 0</code> ensures emails only send when digest data exists.</div>
+
+<p><strong>Profile Filters (re-checked before every action):</strong></p>
+<ul style="font-size:13px; margin:4px 0 12px 20px;">
+  <li><code>Placed Order</code> = 0 times in last 20 days</li>
+  <li><code>Checkout Started</code> = 0 times since starting this flow</li>
+</ul>
 
 <table>
   <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
   <tr class="row-brw">
-    <td><strong>+2 hours</strong></td>
+    <td><strong>+1 day</strong></td>
     <td>Browse #1</td>
     <td><span class="badge live">LIVE</span></td>
-    <td>"Still thinking about [product]?" — Dynamic product image &amp; details. Emphasize craftsmanship. Include 1–2 reviews for the product/category.</td>
-    <td>View Product</td>
-    <td>Klaviyo flow triggered by Viewed Product. Frequency cap: max 1 browse email per 48h regardless of how many products viewed.</td>
+    <td>"💎 Did Something Catch Your Eye?" — Dynamic product grid from <code>browse_digest_items</code> showing ALL recently viewed products with images, names, prices. Purple "View Details" buttons. No divider lines between items.</td>
+    <td>View Details (per item)</td>
+    <td>Conditional split: <code>browse_digest_count > 0</code> → YES sends email, NO exits flow. Subject: <code>💎 Did Something Catch Your Eye?</code> Preview: <code>Pieces you've had your eye on at Jewelry Depot</code></td>
   </tr>
   <tr class="row-brw">
-    <td><strong>+3 days</strong></td>
+    <td><strong>+5 days</strong></td>
     <td>Browse #2</td>
     <td><span class="badge live">LIVE</span></td>
-    <td>Category-specific education. Rings → sizing guide. Necklaces → layering guide. Earrings → face-shape guide.</td>
-    <td>Explore Collection</td>
-    <td>Conditional split by product category viewed. Educational content builds trust for high-AOV consideration.</td>
-  </tr>
-  <tr class="row-brw">
-    <td><strong>+7 days</strong></td>
-    <td>Browse #3</td>
-    <td><span class="badge live">LIVE</span></td>
-    <td>Social proof + "Customers who viewed this also loved…" Show the viewed product + 3 similar items.</td>
-    <td>View Product</td>
-    <td>Cross-sell opportunity. Similar items by category and price tier.</td>
-  </tr>
-  <tr class="row-brw">
-    <td><strong>+14 days</strong></td>
-    <td>Browse #4</td>
-    <td><span class="badge live">LIVE</span></td>
-    <td>"This piece is waiting for you." Full trust block: returns, warranty, authenticity, financing. Final inspiration.</td>
-    <td>View Product</td>
-    <td>Final browse touch. At Day 14, this is halfway through the 27-day consideration cycle — still a valuable touchpoint.</td>
+    <td>"Still Thinking It Over? Only 1 Left In Stock" — Same product grid + Shop With Confidence trust block (free shipping, 30-day returns, lifetime warranty, Affirm financing). Real scarcity — Jewelry Depot carries 1 of each piece.</td>
+    <td>View Details (per item)</td>
+    <td>Second conditional split: <code>browse_digest_count > 0</code>. Subject: <code>Still Thinking It Over? Only 1 Left In Stock</code> Preview: <code>Each piece is unique — free shipping, 30-day returns & lifetime warranty</code></td>
   </tr>
 </table>
 
+<div class="callout">
+  <strong>Digest architecture:</strong> The <code>daily_digest_updater.py</code> script populates <code>browse_digest_items</code> (list of up to 8 products), <code>browse_digest_count</code>, <code>browse_first_item_name</code>, and <code>browse_first_item_price</code> on each profile. Browse items are suppressed if the customer also carted or checked out the same product (matched on <code>product_id</code>). Script must run before flow emails render — schedule via cron or run manually.
+</div>
+
 <!-- 4d: Welcome -->
 <h3 style="color:var(--wel);">4d. 🟢 Welcome Track</h3>
-<p><strong>Trigger:</strong> Profile created + subscribed to email (NOT triggered by purchase)<br>
-<strong>Current state:</strong> 1 email only &nbsp;|&nbsp; <strong>Does NOT suppress other flows</strong></p>
+<p><strong>Trigger:</strong> Profile created + subscribed to email (NOT triggered by purchase). Multiple triggers allowed (newsletter signup, discount form, Shopify checkout subscription).<br>
+<strong>Current state:</strong> 1 email only &nbsp;|&nbsp; <strong>Does NOT suppress other flows</strong><br>
+<strong>Profile Filter:</strong> <code>Has received email from this flow zero times over all time</code> — prevents duplicate welcome emails when multiple triggers fire for the same profile (e.g., Shopify sync + Klaviyo form simultaneously). <span class="badge live">LIVE</span></p>
 
 <table>
   <tr><th>Timing</th><th>Email</th><th>Status</th><th>Content</th><th>CTA</th><th>Notes</th></tr>
@@ -567,26 +564,22 @@
     <td></td>
   </tr>
 
-  <!-- Browse -->
+  <!-- Browse (Digest-Based) -->
   <tr>
     <td class="track-header" style="background:var(--brw); color:#fff;">🔵 BROWSE</td>
     <td></td>
+    <td></td>
     <td>
-      <div class="email-card ec-brw"><strong>Browse #1</strong> Still thinking? <span class="badge live">LIVE</span></div>
+      <div class="email-card ec-brw"><strong>Browse #1</strong> Digest grid — "Catch Your Eye?" <span class="badge live">LIVE</span></div>
     </td>
     <td></td>
     <td></td>
     <td>
-      <div class="email-card ec-brw"><strong>Browse #2</strong> Category education <span class="badge live">LIVE</span></div>
+      <div class="email-card ec-brw"><strong>Browse #2</strong> Digest grid + trust block <span class="badge live">LIVE</span></div>
     </td>
     <td></td>
-    <td>
-      <div class="email-card ec-brw"><strong>Browse #3</strong> Social proof <span class="badge live">LIVE</span></div>
-    </td>
     <td></td>
-    <td>
-      <div class="email-card ec-brw"><strong>Browse #4</strong> Final inspiration <span class="badge live">LIVE</span></div>
-    </td>
+    <td></td>
     <td></td>
   </tr>
 
@@ -862,6 +855,16 @@
   <tr><td>Received this campaign</td><td><strong>NOT in last 3 days</strong></td><td>Prevent repeat sends on back-to-back campaign dates</td></tr>
 </table>
 
+<h3>Browse Digest Flow Segment (Conditional Split)</h3>
+<table>
+  <tr><th>Condition</th><th>Value</th><th>Purpose</th></tr>
+  <tr><td><code>browse_digest_count</code></td><td><strong>&gt; 0</strong></td><td>Has browse items to show (conditional split in flow, not campaign segment)</td></tr>
+  <tr><td>Placed Order</td><td><strong>NOT in last 20 days</strong></td><td>20-day purchaser exclusion (profile filter)</td></tr>
+  <tr><td>Checkout Started</td><td><strong>0 times since starting this flow</strong></td><td>Exit if they escalated to checkout (profile filter)</td></tr>
+</table>
+
+<div class="callout"><strong>Note:</strong> Browse uses a <strong>flow</strong> (not a campaign), so filtering is via conditional splits and profile filters rather than segment conditions. The conditional split on <code>browse_digest_count > 0</code> is checked before each email — if the digest script hasn't run or the profile has no browse data, the profile exits cleanly down the NO branch.</div>
+
 <h3>Cart Digest Campaign Segment</h3>
 <table>
   <tr><th>Condition</th><th>Value</th><th>Purpose</th></tr>
@@ -904,10 +907,10 @@
   </tr>
   <tr class="row-brw">
     <td><strong>Browse</strong></td>
-    <td>Cart add, checkout, purchase, OR 14 days</td>
-    <td><strong>None</strong> — new views can retrigger</td>
-    <td>New <code>Viewed Product</code> event</td>
-    <td>Frequency cap: max 1 browse email per 48h</td>
+    <td>Cart add, checkout, purchase, or flow completes (2 emails over 5 days)</td>
+    <td><strong>7 days</strong> (Klaviyo re-entry setting: "Allow re-entry after 7 days")</td>
+    <td>New <code>Viewed Product</code> event after re-entry window</td>
+    <td>Digest-based: all views consolidated into <code>browse_digest_items</code>. No per-view emails. Re-entry window prevents email fatigue.</td>
   </tr>
   <tr class="row-pur">
     <td><strong>Post-Purchase</strong></td>
@@ -1053,8 +1056,12 @@
   <tr><td>Checkout Flow Email 1 (immediate)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Mailchimp → Klaviyo migration. Template: Abandoned Cart Klaviyo March 2026.html</td></tr>
   <tr><td>Checkout Flow Email 2 (trust/financing)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Part of existing flow</td></tr>
   <tr><td>Cart Flow Email 1 (cart saved)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Existing flow</td></tr>
-  <tr><td>Browse Abandonment Flow (4 emails)</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Full 4-email sequence</td></tr>
+  <tr><td>Browse Abandonment Flow (digest-based, 2 emails)</td><td class="status-done">✅ LIVE</td><td>Apr 3, 2026</td><td>Redesigned from per-view 4-email → digest-based 2-email. Trigger: Viewed Product, 7-day re-entry. Conditional split on <code>browse_digest_count > 0</code>. Profile filters: Placed Order 0 (20d), Checkout Started 0 since flow start.</td></tr>
   <tr><td>Welcome Email 1</td><td class="status-done">✅ LIVE</td><td>Pre-migration</td><td>Single email. expansion planned (F1)</td></tr>
+  <tr><td>Welcome duplicate prevention filter</td><td class="status-done">✅ DONE</td><td>Apr 3, 2026</td><td>Profile filter: "Has received email from this flow zero times over all time." Prevents duplicate sends from multiple triggers (Shopify + Klaviyo form).</td></tr>
+  <tr><td>Browse Digest Properties (<code>browse_digest_items</code>)</td><td class="status-done">✅ DONE</td><td>Apr 3, 2026</td><td>82 profiles updated, 4 purchasers excluded. Properties: <code>browse_digest_items</code>, <code>browse_digest_count</code>, <code>browse_first_item_name</code>, <code>browse_first_item_price</code>.</td></tr>
+  <tr><td>Browse Digest Email #1 HTML (product grid)</td><td class="status-done">✅ DONE</td><td>Apr 3, 2026</td><td>Dynamic grid: 50% width images, product names, formatted prices, purple "View Details" buttons. Uses <code>{% for %}</code> loop over <code>browse_digest_items</code>.</td></tr>
+  <tr><td>Browse Digest Email #2 HTML (grid + trust block)</td><td class="status-done">✅ DONE</td><td>Apr 3, 2026</td><td>Same product grid + "Shop With Confidence" trust block: free shipping, 30-day returns, lifetime warranty, Affirm financing.</td></tr>
   <tr><td>Cart Digest Properties (<code>cart_digest_items</code>)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>43 profiles updated, 3 purchasers excluded. <code>daily_digest_updater.py</code></td></tr>
   <tr><td>Checkout Digest Properties (<code>checkout_digest_items</code>)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>Written for all 43 profiles (same script run)</td></tr>
   <tr><td>Cart Digest Email Template (HTML block)</td><td class="status-done">✅ DONE</td><td>Apr 1, 2026</td><td>Klaviyo drag-and-drop with <code>{% for %}</code> loop. Working with images, prices, compare-at.</td></tr>
@@ -1127,9 +1134,10 @@
 
 <hr style="margin-top:40px; border-color:#dee2e6;">
 <p style="font-size:11px; color:#999; margin-top:10px;">
-  Jewelry Depot Email Flow Architecture v1.0 — April 1, 2026<br>
+  Jewelry Depot Email Flow Architecture v1.1 — April 3, 2026<br>
   Store: shop.jewelrydepot.com | Klaviyo Email Plan | AOV: $750 | 27-day sales cycle<br>
-  Working document — update tracker as items are completed.
+  Working document — update tracker as items are completed.<br>
+  <strong>v1.1 changes:</strong> Browse track redesigned (digest-based 2-email, 7-day re-entry). Welcome duplicate fix (profile filter). 82 browse profiles updated.
 </p>
 
 </body>
